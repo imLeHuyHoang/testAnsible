@@ -1,0 +1,13 @@
+# ansible
+ansible/inventory.ini
+ansible/ansible-lab-key.pem
+
+# terraform
+terraform/terraform.tfstate
+terraform/terraform.tfstate.backup
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+
+labAnsible.md
+cleanup.sh
+ansible/deploy.yml

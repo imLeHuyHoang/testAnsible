@@ -1,0 +1,136 @@
+- name: Deploy App
+  # hosts: Chỉ định group từ inventory, không thể dùng list động
+  # Dùng "webservers" sẽ target tất cả server trong group đó (web1, web2)
+  hosts: webservers
+  become: yes
+  vars: 
+    go_version: "1.21.13"
+    app_dir: /home/ubuntu/myApp
+    server_name: "{{ ansible_host }}"
+    # Lưu ý: version trong command khác với biến go_version
+    install_Go_Command: "tar -C /usr/local -xzf go1.21.13.linux-amd64.tar.gz"
+  tasks:
+    - name: Install dependencies
+      ansible.builtin.apt:
+        name: 
+          - tar
+          - wget
+          - nginx
+        state: present
+        update_cache: yes
+    
+    # Kiểm tra Go đã cài chưa
+    - name: Check if Go already installed
+      ansible.builtin.stat:
+        path: /usr/local/go/bin/go
+      register: go_binary
+    
+    # Download Go nếu chưa cài
+    - name: Download Go
+      ansible.builtin.get_url:
+        url: "https://go.dev/dl/go{{ go_version }}.linux-amd64.tar.gz"
+        dest: /tmp/go{{ go_version }}.linux-amd64.tar.gz
+      when: not go_binary.stat.exists
+    
+    # Extract và cài Go
+    - name: Install Go 
+      ansible.builtin.unarchive:
+        src: /tmp/go{{ go_version }}.linux-amd64.tar.gz
+        dest: /usr/local
+        remote_src: yes
+      when: not go_binary.stat.exists
+    
+    # Thêm Go vào PATH
+    - name: Add Go to PATH
+      ansible.builtin.lineinfile:
+        path: /etc/profile
+        line: 'export PATH=$PATH:/usr/local/go/bin'
+        state: present
+
+    - name: Create app directory
+      ansible.builtin.file:
+        path: "{{ app_dir }}"
+        state: directory
+        mode: '0755'
+    
+    # Fix permission để nginx có thể đọc file
+    # Nginx chạy với user www-data cần quyền execute (x) để traverse vào thư mục
+    - name: Ensure parent directory is readable by nginx
+      ansible.builtin.file:
+        path: /home/ubuntu
+        mode: '0755'
+        state: directory
+
+    - name: Copy app files
+      ansible.builtin.copy:
+        src: ../webapp/backend/
+        dest: "{{ app_dir }}/"
+        mode: '0755'
+        
+    - name: Copy frontend files
+      ansible.builtin.copy:
+        src: ../webapp/frontend/
+        dest: "{{ app_dir }}/frontend/"
+        mode: '0755'
+
+    - name: Copy nginx config
+      ansible.builtin.template:
+        src: nginx.conf.j2
+        dest: /etc/nginx/sites-available/calculator.conf
+        mode: '0644'
+    
+    # Xóa nginx default site để tránh conflict
+    - name: Remove nginx default site
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+
+    - name: Enable nginx site
+      ansible.builtin.file:
+        src: /etc/nginx/sites-available/calculator.conf
+        dest: /etc/nginx/sites-enabled/calculator.conf
+        state: link
+
+    - name: Restart nginx
+      ansible.builtin.service:
+        name: nginx
+        state: restarted  
+
+    - name: Build Go app
+      ansible.builtin.shell: /usr/local/go/bin/go build -o calculator .
+      args:
+        chdir: "{{ app_dir }}"
+      environment:
+        GOPATH: /tmp/go
+        GOCACHE: /tmp/go-cache
+
+    # Tạo systemd service thay vì dùng nohup
+    - name: Create systemd service for app
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/calculator.service
+        content: |
+          [Unit]
+          Description=Calculator API
+          After=network.target
+
+          [Service]
+          Type=simple
+          User={{ ansible_user }}
+          WorkingDirectory={{ app_dir }}
+          ExecStart={{ app_dir }}/calculator
+          Restart=on-failure
+
+          [Install]
+          WantedBy=multi-user.target
+        mode: '0644'
+    
+    - name: Reload systemd
+      ansible.builtin.systemd:
+        daemon_reload: yes
+    
+    - name: Start calculator service
+      ansible.builtin.systemd:
+        name: calculator
+        state: restarted
+        enabled: yes
+

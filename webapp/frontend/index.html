@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Calculator API - Ansible Lab</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+        .container { background: #16213e; padding: 40px; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.3); width: 420px; }
+        h1 { text-align: center; margin-bottom: 30px; color: #e94560; font-size: 24px; }
+        .input-group {display: flex;justify-content: center; align-items: center; ;gap: 10px; margin-bottom: 20px; }
+        input[type="number"] { width: 100%; flex: 1; padding: 12px; border: 2px solid #0f3460; border-radius: 8px; background: #1a1a2e; color: #eee; font-size: 16px; text-align: center; }
+        input:focus { outline: none; border-color: #e94560; }
+        .buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+        button { padding: 14px; border: none; border-radius: 8px; font-size: 16px; font-weight: bold; cursor: pointer; transition: transform 0.1s, opacity 0.2s; }
+        button:hover { opacity: 0.85; transform: scale(1.02); }
+        button:active { transform: scale(0.98); }
+        .btn-add { background: #00b894; color: #fff; }
+        .btn-sub { background: #0984e3; color: #fff; }
+        .btn-mul { background: #6c5ce7; color: #fff; }
+        .btn-div { background: #e17055; color: #fff; }
+        .result { background: #0f3460; padding: 20px; border-radius: 8px; text-align: center; font-size: 20px; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+        .error { color: #e94560; }
+        .label { font-size: 12px; color: #888; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧮 Calculator API</h1>
+        <p class="label">Nhập 2 số:</p>
+        <div class="input-group">
+            <input type="number" id="numA" placeholder="Số A" value="10">
+            <input type="number" id="numB" placeholder="Số B" value="5">
+        </div>
+        <div class="buttons">
+            <button class="btn-add" onclick="calculate('add')">➕ Cộng</button>
+            <button class="btn-sub" onclick="calculate('subtract')">➖ Trừ</button>
+            <button class="btn-mul" onclick="calculate('multiply')">✖️ Nhân</button>
+            <button class="btn-div" onclick="calculate('divide')">➗ Chia</button>
+        </div>
+        <p class="label">Kết quả:</p>
+        <div class="result" id="result">Chọn phép tính...</div>
+    </div>
+    <script>
+        async function calculate(op) {
+            const a = document.getElementById('numA').value;
+            const b = document.getElementById('numB').value;
+            const resultEl = document.getElementById('result');
+            try {
+                const resp = await fetch(`/api/${op}?a=${a}&b=${b}`);
+                const data = await resp.json();
+                if (data.error) {
+                    resultEl.innerHTML = `<span class="error">${data.error}</span>`;
+                } else {
+                    resultEl.textContent = `${data.a} ${opSymbol(op)} ${data.b} = ${data.result}`;
+                }
+            } catch (e) {
+                resultEl.innerHTML = `<span class="error">Lỗi kết nối server</span>`;
+            }
+        }
+        function opSymbol(op) {
+            return { add: '+', subtract: '-', multiply: '×', divide: '÷' }[op] || '?';
+        }
+    </script>
+</body>
+</html>
